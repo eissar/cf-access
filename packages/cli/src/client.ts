@@ -1,5 +1,5 @@
 import { discoverApp, validateAuthDomain } from './metadata.js';
-import { readToken, tokenAccount, validToken, withLock, writeToken } from './cache.js';
+import { readToken, tokenAccount, tokenClaims, validToken, withLock, writeToken } from './cache.js';
 import { createKeychainStore } from './keychain.js';
 import { message, request } from './http.js';
 import { transfer } from './transfer.js';
@@ -72,6 +72,31 @@ async function exchange(appUrl: URL, orgToken: string, audience: string, authDom
     current = redirect;
   }
   return undefined;
+}
+
+export interface TokenStatus {
+  hostname: string;
+  state: 'missing' | 'expired' | 'invalid' | 'valid';
+  expiresAt?: string;
+}
+
+/** Read-only credential inspection. Discovery verifies app identity, not token acceptance. */
+export async function status(input: string, options: LoginOptions = {}): Promise<TokenStatus> {
+  const appUrl = normalizeURL(input);
+  const info = await discoverApp(appUrl, options);
+  const store = options.tokenStore ?? await createKeychainStore();
+  const account = tokenAccount('app', `${info.appHostname}\n${info.appAud}`);
+  const token = await store.get(account);
+  const result = { hostname: appUrl.hostname };
+  if (token === null) return { ...result, state: 'missing' };
+  const claims = tokenClaims(token);
+  if (!claims || typeof claims.exp !== 'number' || !Number.isFinite(claims.exp)) return { ...result, state: 'invalid' };
+  const expiry = new Date(claims.exp * 1000);
+  if (!Number.isFinite(expiry.getTime())) return { ...result, state: 'invalid' };
+  const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!audience.includes(info.appAud)) return { ...result, state: 'invalid' };
+  const state = claims.exp <= Math.floor(Date.now() / 1000) ? 'expired' : 'valid';
+  return { ...result, state, expiresAt: expiry.toISOString() };
 }
 
 export async function login(input: string, options: LoginOptions = {}): Promise<string> {

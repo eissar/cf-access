@@ -8276,6 +8276,24 @@ async function exchange(appUrl, orgToken, audience, authDomain, options) {
   }
   return void 0;
 }
+async function status(input, options = {}) {
+  const appUrl = normalizeURL(input);
+  const info = await discoverApp(appUrl, options);
+  const store = options.tokenStore ?? await createKeychainStore();
+  const account = tokenAccount("app", `${info.appHostname}
+${info.appAud}`);
+  const token = await store.get(account);
+  const result = { hostname: appUrl.hostname };
+  if (token === null) return { ...result, state: "missing" };
+  const claims = tokenClaims(token);
+  if (!claims || typeof claims.exp !== "number" || !Number.isFinite(claims.exp)) return { ...result, state: "invalid" };
+  const expiry = new Date(claims.exp * 1e3);
+  if (!Number.isFinite(expiry.getTime())) return { ...result, state: "invalid" };
+  const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!audience.includes(info.appAud)) return { ...result, state: "invalid" };
+  const state = claims.exp <= Math.floor(Date.now() / 1e3) ? "expired" : "valid";
+  return { ...result, state, expiresAt: expiry.toISOString() };
+}
 async function login(input, options = {}) {
   const appUrl = normalizeURL(input);
   const info = await discoverApp(appUrl, options);
@@ -8319,7 +8337,7 @@ ${info.appAud}`);
 }
 
 // packages/cli/src/cli.ts
-function createCLI(authenticate = login) {
+function createCLI(authenticate = login, inspect = status) {
   const program2 = new Command().name("cf-access").description("Log in to a Cloudflare Access application").version("0.1.0");
   program2.command("login [url]").description("Authenticate and store credentials in the OS keychain").option("--app <url>", "Application URL (alternative to positional URL)").option("--cache-dir <path>", "Public JWKS cache and lock directory (tokens use OS keychain)").option("--auto-close", "Ask Access to close the browser interstitial").option("--fedramp", "Use the FedRAMP transfer relay").option("--quiet", "Suppress success output (login instructions still use stderr)").action(async (url, flags) => {
     const input = url ?? flags.app;
@@ -8341,6 +8359,17 @@ function createCLI(authenticate = login) {
       process.removeListener("SIGINT", abort);
       process.removeListener("SIGTERM", abort);
     }
+  });
+  program2.command("status [url]").description("Inspect the application token in the OS keychain without logging in").option("--app <url>", "Application URL (alternative to positional URL)").option("--cache-dir <path>", "Public JWKS cache directory").action(async (url, flags) => {
+    const input = url ?? flags.app;
+    if (!input) throw new Error("provide an application URL or --app <url>");
+    const result = await inspect(input, { cacheDir: flags.cacheDir });
+    process.stdout.write(`${result.hostname}: application token ${result.state}
+`);
+    if (result.expiresAt) process.stdout.write(`Expires: ${result.expiresAt}
+`);
+    if (result.state === "valid") process.stdout.write("Local expiry/audience check only; not verified at edge.\n");
+    else process.exitCode = 1;
   });
   return program2;
 }

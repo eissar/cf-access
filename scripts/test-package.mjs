@@ -39,6 +39,7 @@ try {
     const help = run('pnpm', ['exec', 'cf-access'], consumer);
     assert.match(help, /Usage: cf-access/);
     assert.match(run('pnpm', ['exec', 'cf-access', 'login', '--help'], consumer), /--cache-dir/);
+    assert.match(run('pnpm', ['exec', 'cf-access', 'status', '--help'], consumer), /--app/);
     const executable = join(consumer, 'node_modules/cf-access/bin/cf-access.js');
     assert.match(run(process.execPath, [executable, '--version'], consumer), /0\.1\.0/);
     console.log(`${name} consumer install with blockExoticSubdeps=true: passed`);

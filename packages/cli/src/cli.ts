@@ -1,9 +1,9 @@
 import { Command } from 'commander';
-import { login } from './client.js';
+import { login, status } from './client.js';
 
 type Login = typeof login;
 
-export function createCLI(authenticate: Login = login): Command {
+export function createCLI(authenticate: Login = login, inspect: typeof status = status): Command {
   const program = new Command().name('cf-access').description('Log in to a Cloudflare Access application').version('0.1.0');
   program.command('login [url]')
     .description('Authenticate and store credentials in the OS keychain')
@@ -31,6 +31,19 @@ export function createCLI(authenticate: Login = login): Command {
         process.removeListener('SIGINT', abort);
         process.removeListener('SIGTERM', abort);
       }
+    });
+  program.command('status [url]')
+    .description('Inspect the application token in the OS keychain without logging in')
+    .option('--app <url>', 'Application URL (alternative to positional URL)')
+    .option('--cache-dir <path>', 'Public JWKS cache directory')
+    .action(async (url: string | undefined, flags: { app?: string; cacheDir?: string }) => {
+      const input = url ?? flags.app;
+      if (!input) throw new Error('provide an application URL or --app <url>');
+      const result = await inspect(input, { cacheDir: flags.cacheDir });
+      process.stdout.write(`${result.hostname}: application token ${result.state}\n`);
+      if (result.expiresAt) process.stdout.write(`Expires: ${result.expiresAt}\n`);
+      if (result.state === 'valid') process.stdout.write('Local expiry/audience check only; not verified at edge.\n');
+      else process.exitCode = 1;
     });
   return program;
 }
