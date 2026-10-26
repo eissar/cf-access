@@ -75,7 +75,7 @@ test('verifies signed metadata and decrypts padded-base64 nacl transfer response
     throw new Error(`unexpected request ${init?.method} ${url}`);
   };
   try {
-    const result = await login('https://app.example.test/start?existing=keep', { cacheDir: dir, noBrowser: true, fetch: fetcher, onMessage: message => { if (message.startsWith('Open this URL')) browserUrl = message.split('\n')[1]!; } });
+    const result = await login('https://app.example.test/start?existing=keep', { cacheDir: dir, fetch: fetcher, onMessage: message => { if (message.startsWith('Open this URL')) browserUrl = message.split('\n')[1]!; } });
     assert.equal(validToken(result, 'app-aud'), true);
     assert.equal(pollCount, 1);
     const landing = new URL(browserUrl);
@@ -124,7 +124,7 @@ test('rejects cached token at edge, removes it, and retries browser transfer onc
     throw new Error(`unexpected request ${init?.method} ${url}`);
   };
   try {
-    const result = await login('https://app.example.test/', { cacheDir: dir, noBrowser: true, fetch: fetcher });
+    const result = await login('https://app.example.test/', { cacheDir: dir, fetch: fetcher });
     assert.notEqual(result, cached);
     assert.equal(edgeChecks, 2);
     assert.equal(transferPolls, 1);

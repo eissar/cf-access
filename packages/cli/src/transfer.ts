@@ -23,9 +23,6 @@ export async function transfer(appUrl: URL, aud: string, options: LoginOptions):
   if (options.autoClose) browser.searchParams.set('close_interstitial', 'true');
   const url = browser.toString();
   message(options, `Open this URL to authenticate:\n${url}`);
-  if (!options.noBrowser && options.openBrowser) {
-    try { await options.openBrowser(url); } catch { message(options, `Could not launch browser. Open the URL manually:\n${url}`); }
-  }
   const endpoint = `${base}transfer/${publicKey}`;
   for (let attempt = 0; attempt < 10; attempt++) {
     const response = await request(endpoint, { method: 'GET' }, options, 60_000);

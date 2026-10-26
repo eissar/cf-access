@@ -8,7 +8,7 @@ TypeScript implementation of `cloudflared access login <url>`, for Node.js 22+ a
 pnpm install
 pnpm cf-access login https://app.example.com
 pnpm cf-access login app.example.com --no-verbose
-pnpm cf-access login --app https://app.example.com --no-browser
+pnpm cf-access login --app https://app.example.com
 ```
 
 For the compiled entry point:
@@ -20,14 +20,16 @@ node bin/cf-access.js login https://app.example.com
 
 Login instructions go to stderr. By default stdout contains a success message and JWT; `--no-verbose` or `--app` prints just the JWT. `--quiet` suppresses token output, not authentication instructions.
 
-Options: `--cache-dir <path>`, `--no-browser`, `--auto-close`, `--fedramp`. SIGINT/SIGTERM abort pending network requests. Browser opening uses argument-based OS commands without shell interpolation.
+Authentication URLs are printed for you to open manually; this tool never launches a browser.
+
+Options: `--cache-dir <path>`, `--auto-close`, `--fedramp`. SIGINT/SIGTERM abort pending network requests.
 
 ## Authentication flow
 
 1. Normalize the application URL to HTTPS and request signed Access metadata.
 2. Verify the RS256 metadata signature against the auth domain's JWKS; validate hostname, audience, type, and issuance time. Auth domains must end in `.cloudflareaccess.com`.
 3. Try a cached application token, then exchange a cached organization token using Access redirects.
-4. Otherwise generate an ephemeral NaCl box keypair, open the application's `/cdn-cgi/access/cli` endpoint, and long-poll the transfer relay.
+4. Otherwise generate an ephemeral NaCl box keypair, print the application's `/cdn-cgi/access/cli` URL for manual authentication, and long-poll the transfer relay.
 5. Decrypt and cache the returned credentials, then check the application token at the edge. Recover from an Access login redirect by acquiring another token.
 6. Print the application JWT.
 
@@ -51,12 +53,11 @@ Organization-token exchange permits redirects only to the original application o
 import { login } from './packages/cli/src/client.js';
 
 const token = await login('https://app.example.com', {
-  noBrowser: true,
   onMessage: message => console.error(message),
 });
 ```
 
-The CLI supplies the platform browser launcher. Library callers must supply `openBrowser` to launch a browser, or display authentication URLs through `onMessage`. Options also support `cacheDir`, `signal`, `autoClose`, `fedramp`, and injectable `fetch`.
+Library callers should display authentication URLs through `onMessage`; no browser is launched. Options also support `cacheDir`, `signal`, `autoClose`, `fedramp`, and injectable `fetch`.
 
 ## Development
 

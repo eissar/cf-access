@@ -8,7 +8,7 @@ const run = (...args: string[]) => spawnSync(process.execPath, ['--import', 'tsx
 test('CLI exposes login and documented options', () => {
   const command = createCLI().commands.find(command => command.name() === 'login');
   assert.ok(command);
-  assert.ok(command.options.some(option => option.long === '--no-browser'));
+  assert.equal(command.options.some(option => option.long === '--no-browser'), false);
   assert.ok(command.options.some(option => option.long === '--cache-dir'));
 });
 

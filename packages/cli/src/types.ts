@@ -1,11 +1,9 @@
 export interface LoginOptions {
   cacheDir?: string;
-  noBrowser?: boolean;
   autoClose?: boolean;
   fedramp?: boolean;
   signal?: AbortSignal;
   onMessage?: (message: string) => void;
-  openBrowser?: (url: string) => Promise<void>;
   fetch?: typeof fetch;
 }
 
