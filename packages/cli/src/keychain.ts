@@ -2,12 +2,12 @@ import type { SecretStorageBackend } from '../../../vendor/cross-keychain/index.
 import type { TokenStore } from './types.js';
 
 export const KEYCHAIN_SERVICE = 'cf-access';
-const osBackends = new Set(['native-macos', 'native-windows', 'native-linux', 'macos', 'windows', 'secret-service']);
+const osBackends = new Set(['macos', 'windows', 'secret-service']);
 
 /** Adapt a captured backend, never silently falling back to file or null storage. */
 export function keychainTokenStore(backend: Pick<SecretStorageBackend, 'id' | 'getPassword' | 'setPassword' | 'deletePassword'>): TokenStore {
   if (!osBackends.has(backend.id)) {
-    throw new Error(`cross-keychain selected '${backend.id}'; cf-access requires an OS keychain (file/null backends are disabled)`);
+    throw new Error(`cross-keychain selected '${backend.id}'; cf-access requires a non-native OS keychain (native/file/null backends are disabled). Linux requires secret-tool (Debian/Ubuntu: libsecret-tools) and an active Secret Service session`);
   }
   return {
     get: account => backend.getPassword(KEYCHAIN_SERVICE, account),
@@ -22,6 +22,8 @@ export function keychainTokenStore(backend: Pick<SecretStorageBackend, 'id' | 'g
 }
 
 export async function createKeychainStore(): Promise<TokenStore> {
-  const { getKeyring } = await import('../../../vendor/cross-keychain/index.js');
+  const { getKeyring, initBackend } = await import('../../../vendor/cross-keychain/index.js');
+  // Restrict selection itself, so a native backend cannot mask Secret Service.
+  await initBackend(backend => osBackends.has(backend.id));
   return keychainTokenStore(await getKeyring());
 }

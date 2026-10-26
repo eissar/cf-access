@@ -22,6 +22,10 @@ try {
   const repository = join(unpacked, 'package');
   const manifest = JSON.parse(await readFile(join(repository, 'package.json'), 'utf8'));
   assert.equal(manifest.dependencies?.['cross-keychain'], undefined);
+  assert.equal(manifest.dependencies?.['@napi-rs/keyring'], undefined);
+  assert.equal(manifest.optionalDependencies?.['@napi-rs/keyring'], undefined);
+  const bundle = await readFile(join(repository, 'bin/cf-access.js'), 'utf8');
+  assert.doesNotMatch(bundle, /import\(["']@napi-rs\/keyring["']\)/);
   for (const dependency of Object.values({ ...manifest.dependencies, ...manifest.optionalDependencies })) {
     assert.ok(!/^(?:github:|git[+:]|file:|link:|https?:)/.test(dependency));
   }

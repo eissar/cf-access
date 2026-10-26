@@ -15,9 +15,10 @@ Git dependency plus build patch also failed consumer installs with pnpm's
 the ESM library into `bin/cf-access.js`. There is no Git dependency, local
 dependency, package patch, or install-time build.
 
-The upstream library build imports only Node built-ins and the optional native
-`@napi-rs/keyring` package. The native bindings remain an ordinary npm optional
-dependency; CLI-only upstream dependencies are not needed.
+The upstream build contains optional imports of `@napi-rs/keyring`, but cf-access
+does not depend on or use those bindings. The CLI build replaces those optional
+imports with a disabled module, so even a consumer's installed native bindings
+cannot be loaded. CLI-only upstream dependencies are not needed.
 
 No upstream credential behavior has been changed. Its Windows PowerShell helper
 is copied to `bin/scripts/credman.ps1`, matching the bundled library's
@@ -50,13 +51,18 @@ and login help entry points. These are packaging tests, not live login tests.
 
 ## Storage policy
 
-The adapter captures the selected backend and accepts only `native-macos`,
-`native-windows`, `native-linux`, `macos`, `windows`, and `secret-service`.
-File, null and unknown backend IDs are rejected before credential operations.
-Keychain errors propagate; no token silently falls back to a file. Public JWKS
-and process locks remain filesystem-based.
+Selection is restricted to cross-keychain's non-native `macos`, `windows`, and
+`secret-service` backends. Native, file, null and unknown backend IDs are rejected.
+Linux uses `secret-tool` with an active Secret Service daemon, such as GNOME
+Keyring or KDE Wallet. On Debian/Ubuntu install `libsecret-tools` if `secret-tool`
+is missing. There is no kernel-keyutils or file fallback.
+
+Credentials previously stored by the native backend are not migrated. Log in
+again after configuring Secret Service. Public JWKS and process locks remain
+filesystem-based.
 
 This policy applies to the default store; callers providing their own
 `TokenStore` control its storage semantics. OS keychains can prompt and require
-an active user session. The upstream CLI-based macOS fallback can briefly expose
-secrets through process arguments; prefer `TS_KEYRING_BACKEND=native-macos`.
+an active user session. The macOS CLI backend can briefly expose secrets through
+process arguments. Setting `TS_KEYRING_BACKEND` to a native/file/null backend is
+an error, not permission to bypass the restriction.

@@ -30,7 +30,7 @@ test('adapter namespaces application and organization credentials under cf-acces
   const values = new Map<string, string>();
   const calls: string[][] = [];
   const store = keychainTokenStore({
-    id: 'native-linux',
+    id: 'secret-service',
     async getPassword(service, account) { calls.push(['get', service, account]); return values.get(account) ?? null; },
     async setPassword(service, account, value) { calls.push(['set', service, account]); values.set(account, value); },
     async deletePassword(service, account) { calls.push(['delete', service, account]); values.delete(account); },
@@ -51,14 +51,14 @@ test('adapter namespaces application and organization credentials under cf-acces
   assert.equal(calls.filter(call => call[0] === 'delete').length, 1);
 });
 
-test('file/null/unknown backends are rejected before reading or writing secrets', () => {
-  for (const id of ['file', 'null', 'unknown']) {
+test('native/file/null/unknown backends are rejected before credential operations', () => {
+  for (const id of ['native-linux', 'native-macos', 'native-windows', 'file', 'null', 'unknown']) {
     assert.throws(() => keychainTokenStore({
       id,
       async getPassword() { throw new Error('must not be called'); },
       async setPassword() { throw new Error('must not be called'); },
       async deletePassword() { throw new Error('must not be called'); },
-    }), /requires an OS keychain/);
+    }), /requires a non-native OS keychain/);
   }
 });
 
@@ -79,7 +79,7 @@ test('cache preserves valid tokens and removes expired, malformed or wrong-audie
 test('keychain access errors propagate rather than becoming cache misses or disk fallback', async () => {
   const denied = new Error('keychain is locked');
   const store = keychainTokenStore({
-    id: 'native-macos',
+    id: 'macos',
     async getPassword() { throw denied; },
     async setPassword() { throw denied; },
     async deletePassword() { throw denied; },

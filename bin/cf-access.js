@@ -3474,6 +3474,14 @@ var require_commander = __commonJS({
   }
 });
 
+// cf-access:disabled-native-keyring
+var disabled_native_keyring_exports = {};
+var init_disabled_native_keyring = __esm({
+  "cf-access:disabled-native-keyring"() {
+    throw new Error("Native keyring bindings are disabled in cf-access");
+  }
+});
+
 // vendor/cross-keychain/index.js
 var cross_keychain_exports = {};
 __export(cross_keychain_exports, {
@@ -3626,7 +3634,7 @@ async function loadNativeModule$2() {
     return;
   nativeModuleLoadAttempted$2 = true;
   try {
-    const nativeModule = await import("@napi-rs/keyring");
+    const nativeModule = await Promise.resolve().then(() => (init_disabled_native_keyring(), disabled_native_keyring_exports));
     NativeKeyringEntry$2 = nativeModule.Entry;
   } catch {
     NativeKeyringEntry$2 = null;
@@ -3637,7 +3645,7 @@ async function loadNativeModule$1() {
     return;
   nativeModuleLoadAttempted$1 = true;
   try {
-    const nativeModule = await import("@napi-rs/keyring");
+    const nativeModule = await Promise.resolve().then(() => (init_disabled_native_keyring(), disabled_native_keyring_exports));
     NativeKeyringEntry$1 = nativeModule.Entry;
   } catch {
     NativeKeyringEntry$1 = null;
@@ -3648,7 +3656,7 @@ async function loadNativeModule() {
     return;
   nativeModuleLoadAttempted = true;
   try {
-    const nativeModule = await import("@napi-rs/keyring");
+    const nativeModule = await Promise.resolve().then(() => (init_disabled_native_keyring(), disabled_native_keyring_exports));
     NativeKeyringEntry = nativeModule.Entry;
   } catch {
     NativeKeyringEntry = null;
@@ -4065,7 +4073,7 @@ var init_cross_keychain = __esm({
           return [];
         }
         try {
-          const { findCredentials } = await import("@napi-rs/keyring");
+          const { findCredentials } = await Promise.resolve().then(() => (init_disabled_native_keyring(), disabled_native_keyring_exports));
           const credentials = findCredentials(service);
           return credentials.map((cred) => cred.account);
         } catch {
@@ -8146,10 +8154,10 @@ async function withLock(path2, signal, work) {
 
 // packages/cli/src/keychain.ts
 var KEYCHAIN_SERVICE = "cf-access";
-var osBackends = /* @__PURE__ */ new Set(["native-macos", "native-windows", "native-linux", "macos", "windows", "secret-service"]);
+var osBackends = /* @__PURE__ */ new Set(["macos", "windows", "secret-service"]);
 function keychainTokenStore(backend) {
   if (!osBackends.has(backend.id)) {
-    throw new Error(`cross-keychain selected '${backend.id}'; cf-access requires an OS keychain (file/null backends are disabled)`);
+    throw new Error(`cross-keychain selected '${backend.id}'; cf-access requires a non-native OS keychain (native/file/null backends are disabled). Linux requires secret-tool (Debian/Ubuntu: libsecret-tools) and an active Secret Service session`);
   }
   return {
     get: (account) => backend.getPassword(KEYCHAIN_SERVICE, account),
@@ -8162,7 +8170,8 @@ function keychainTokenStore(backend) {
   };
 }
 async function createKeychainStore() {
-  const { getKeyring: getKeyring2 } = await Promise.resolve().then(() => (init_cross_keychain(), cross_keychain_exports));
+  const { getKeyring: getKeyring2, initBackend: initBackend2 } = await Promise.resolve().then(() => (init_cross_keychain(), cross_keychain_exports));
+  await initBackend2((backend) => osBackends.has(backend.id));
   return keychainTokenStore(await getKeyring2());
 }
 

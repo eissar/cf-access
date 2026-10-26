@@ -8,7 +8,18 @@ await build({
   platform: 'node',
   format: 'esm',
   target: 'node22',
-  external: ['@napi-rs/keyring'],
+  // Preserve the vendored upstream files, but disable their optional native
+  // imports in the bundle, even if a consumer has the bindings installed.
+  plugins: [{
+    name: 'disable-native-keyring',
+    setup(build) {
+      build.onResolve({ filter: /^@napi-rs\/keyring$/ }, () => ({ path: 'disabled-native-keyring', namespace: 'cf-access' }));
+      build.onLoad({ filter: /.*/, namespace: 'cf-access' }, () => ({
+        contents: 'throw new Error("Native keyring bindings are disabled in cf-access"); export {};',
+        loader: 'js',
+      }));
+    },
+  }],
   // tweetnacl's optional Node crypto access uses CommonJS require.
   banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
   legalComments: 'inline',

@@ -29,9 +29,6 @@
     "node": ">=22"
   },
   "packageManager": "pnpm@12.15.0",
-  "optionalDependencies": {
-    "@napi-rs/keyring": "^1.2.0"
-  },
   "files": [
     "bin/",
     "vendor/cross-keychain/LICENSE",
