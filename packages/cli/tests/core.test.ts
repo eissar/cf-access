@@ -44,7 +44,15 @@ test('local token parsing validates expiry and audience without asserting signat
   assert.equal(validToken('not-a-token'), false);
 });
 
-test('verifies signed metadata and decrypts padded-base64 nacl transfer response', async () => {
+for (const orgCase of [
+  { name: 'valid', value: token('org-aud'), cached: true },
+  { name: 'expired', value: jwt({ aud: 'org-aud', exp: 1 }), cached: false },
+  { name: 'missing', value: undefined, cached: false },
+  { name: 'empty', value: '', cached: false },
+  { name: 'malformed', value: 'not-a-jwt', cached: false },
+  { name: 'wrong type', value: 123, cached: false },
+]) {
+test(`signed metadata and encrypted transfer with ${orgCase.name} organization token`, async () => {
   const dir = await mkdtemp(join(tmpdir(), 'cf-access-core-'));
   const tokenStore = new MemoryTokenStore();
   const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -68,7 +76,7 @@ test('verifies signed metadata and decrypts padded-base64 nacl transfer response
       const key = url.pathname.split('/').pop()!;
       const clientPub = new Uint8Array(Buffer.from(key, 'base64url'));
       const nonce = new Uint8Array(nacl.box.nonceLength).fill(7);
-      const body = Buffer.from(JSON.stringify({ app_token: token('app-aud'), org_token: token('org-aud') }));
+      const body = Buffer.from(JSON.stringify({ app_token: token('app-aud'), org_token: orgCase.value }));
       const encrypted = nacl.box(new Uint8Array(body), nonce, clientPub, server.secretKey);
       const responseBody = Buffer.concat([Buffer.from(nonce), Buffer.from(encrypted)]).toString('base64');
       return new Response(responseBody, { status: 200, headers: { 'service-public-key': Buffer.from(server.publicKey).toString('base64url') } });
@@ -89,7 +97,7 @@ test('verifies signed metadata and decrypts padded-base64 nacl transfer response
     assert.equal(redirect.searchParams.get('existing'), 'keep');
     assert.equal(redirect.searchParams.get('token'), landing.searchParams.get('token'));
     assert.equal(landing.searchParams.get('token'), redirect.searchParams.get('token'));
-    assert.ok(await tokenStore.get(tokenAccount('org', 'team.cloudflareaccess.com')));
+    assert.equal((await tokenStore.get(tokenAccount('org', 'team.cloudflareaccess.com'))) !== null, orgCase.cached);
     assert.equal(await tokenStore.get(tokenAccount('app', 'app.example.test\napp-aud')), result);
     for (const file of await readdir(dir)) {
       assert.ok(file.endsWith('.jwks.json'), `unexpected disk cache file: ${file}`);
@@ -98,7 +106,9 @@ test('verifies signed metadata and decrypts padded-base64 nacl transfer response
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
-test('rejects cached token at edge, removes it, and retries browser transfer once', async () => {
+}
+
+test('rejects cached and transferred tokens at edge, then retries once with an expired organization token', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'cf-access-retry-'));
   const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   const jwk = await exportJWK(publicKey); jwk.kid = 'key'; jwk.alg = 'RS256';
@@ -117,7 +127,7 @@ test('rejects cached token at edge, removes it, and retries browser transfer onc
     if (url.hostname === 'team.cloudflareaccess.com') return new Response(JSON.stringify({ keys: [jwk] }));
     if (url.hostname === 'app.example.test' && url.searchParams.has('cloudflared_token_check')) {
       edgeChecks++;
-      if (edgeChecks === 1) return new Response(null, { status: 302, headers: { location: '/cdn-cgi/access/login/app' } });
+      if (edgeChecks <= 2) return new Response(null, { status: 302, headers: { location: '/cdn-cgi/access/login/app' } });
       return new Response(null, { status: 200 });
     }
     if (url.hostname === 'app.example.test' && url.pathname === '/cdn-cgi/access/cli') return new Response(null, { status: 200 });
@@ -125,7 +135,7 @@ test('rejects cached token at edge, removes it, and retries browser transfer onc
       transferPolls++;
       const clientPub = new Uint8Array(Buffer.from(url.pathname.split('/').pop()!, 'base64url'));
       const nonce = new Uint8Array(nacl.box.nonceLength).fill(9);
-      const body = new Uint8Array(Buffer.from(JSON.stringify({ app_token: token(), org_token: token('org-aud') })));
+      const body = new Uint8Array(Buffer.from(JSON.stringify({ app_token: token(), org_token: jwt({ aud: 'org-aud', exp: 1 }) })));
       const encrypted = nacl.box(body, nonce, clientPub, server.secretKey);
       return new Response(Buffer.concat([Buffer.from(nonce), Buffer.from(encrypted)]).toString('base64'), { status: 200, headers: { 'service-public-key': Buffer.from(server.publicKey).toString('base64url') } });
     }
@@ -134,8 +144,9 @@ test('rejects cached token at edge, removes it, and retries browser transfer onc
   try {
     const result = await login('https://app.example.test/', { cacheDir: dir, tokenStore, fetch: fetcher });
     assert.notEqual(result, cached);
-    assert.equal(edgeChecks, 2);
-    assert.equal(transferPolls, 1);
+    assert.equal(edgeChecks, 3);
+    assert.equal(transferPolls, 2);
+    assert.equal(await tokenStore.get(tokenAccount('org', 'team.cloudflareaccess.com')), null);
     assert.ok(tokenStore.deleted.includes(appAccount));
     assert.equal(await tokenStore.get(appAccount), result);
   } finally { await rm(dir, { recursive: true, force: true }); }

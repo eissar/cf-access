@@ -5,7 +5,7 @@ import type { LoginOptions } from './types.js';
 const b64url = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
 const fromB64url = (value: string) => new Uint8Array(Buffer.from(value.replace(/-/g, '+').replace(/_/g, '/'), 'base64'));
 
-export async function transfer(appUrl: URL, aud: string, options: LoginOptions): Promise<{ app_token: string; org_token: string }> {
+export async function transfer(appUrl: URL, aud: string, options: LoginOptions): Promise<{ app_token: string; org_token?: string }> {
   const pair = nacl.box.keyPair();
   const publicKey = b64url(pair.publicKey);
   const fedramp = options.fedramp || appUrl.hostname.toLowerCase().endsWith('.fed.cloudflareaccess.com');
@@ -35,8 +35,8 @@ export async function transfer(appUrl: URL, aud: string, options: LoginOptions):
       const opened = nacl.box.open(ciphertext.slice(nacl.box.nonceLength), nonce, sender, pair.secretKey);
       if (!opened) throw new Error('unable to decrypt transfer response');
       const payload = JSON.parse(Buffer.from(opened).toString('utf8')) as { app_token?: string; org_token?: string };
-      if (!payload.app_token || !payload.org_token) throw new Error('transfer response missing tokens');
-      return { app_token: payload.app_token, org_token: payload.org_token };
+      if (typeof payload.app_token !== 'string' || !payload.app_token) throw new Error('transfer response missing application token');
+      return { app_token: payload.app_token, org_token: typeof payload.org_token === 'string' ? payload.org_token : undefined };
     }
     message(options, 'Waiting for browser authentication…');
   }

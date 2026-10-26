@@ -126,16 +126,14 @@ export async function login(input: string, options: LoginOptions = {}): Promise<
     message(options, 'Starting Cloudflare Access browser login…');
     const tokens = await transfer(appUrl, info.appAud, { ...options, fedramp: options.fedramp || info.authDomain.endsWith('.fed.cloudflareaccess.com') });
     if (!validToken(tokens.app_token, info.appAud)) throw new Error('received app token is expired or has an unexpected audience');
-    if (!validToken(tokens.org_token)) throw new Error('received organization token is expired');
-    await writeToken(store, orgAccount, tokens.org_token);
+    if (tokens.org_token && validToken(tokens.org_token)) await writeToken(store, orgAccount, tokens.org_token);
     await writeToken(store, appAccount, tokens.app_token);
     if (await tokenAccepted(appUrl, tokens.app_token, options)) return tokens.app_token;
     await store.delete(appAccount);
     const retry = await transfer(appUrl, info.appAud, { ...options, fedramp: options.fedramp || info.authDomain.endsWith('.fed.cloudflareaccess.com') });
     if (!validToken(retry.app_token, info.appAud)) throw new Error('received app token is expired or has an unexpected audience');
     if (!await tokenAccepted(appUrl, retry.app_token, options)) throw new Error('failed to verify token at application edge');
-    if (!validToken(retry.org_token)) throw new Error('received organization token is expired');
-    await writeToken(store, orgAccount, retry.org_token);
+    if (retry.org_token && validToken(retry.org_token)) await writeToken(store, orgAccount, retry.org_token);
     await writeToken(store, appAccount, retry.app_token);
     return retry.app_token;
   });
