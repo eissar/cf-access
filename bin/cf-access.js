@@ -8319,9 +8319,9 @@ ${info.appAud}`);
 }
 
 // packages/cli/src/cli.ts
-function createCLI() {
+function createCLI(authenticate = login) {
   const program2 = new Command().name("cf-access").description("Log in to a Cloudflare Access application").version("0.1.0");
-  program2.command("login [url]").description("Authenticate in your browser and print an application JWT").option("--app <url>", "Application URL (alternative to positional URL)").option("--cache-dir <path>", "Public JWKS cache and lock directory (tokens use OS keychain)").option("--auto-close", "Ask Access to close the browser interstitial").option("--fedramp", "Use the FedRAMP transfer relay").option("--quiet", "Suppress token output (login instructions still use stderr)").option("--no-verbose", "Print only the JWT, without a success message").action(async (url, flags) => {
+  program2.command("login [url]").description("Authenticate and store credentials in the OS keychain").option("--app <url>", "Application URL (alternative to positional URL)").option("--cache-dir <path>", "Public JWKS cache and lock directory (tokens use OS keychain)").option("--auto-close", "Ask Access to close the browser interstitial").option("--fedramp", "Use the FedRAMP transfer relay").option("--quiet", "Suppress success output (login instructions still use stderr)").action(async (url, flags) => {
     const input = url ?? flags.app;
     if (!input) throw new Error("provide an application URL or --app <url>");
     const controller = new AbortController();
@@ -8329,18 +8329,14 @@ function createCLI() {
     process.once("SIGINT", abort);
     process.once("SIGTERM", abort);
     try {
-      const token = await login(input, {
+      await authenticate(input, {
         cacheDir: flags.cacheDir,
         autoClose: flags.autoClose,
         fedramp: flags.fedramp,
         signal: controller.signal,
         onMessage: (message3) => process.stderr.write(message3 + "\n")
       });
-      if (!flags.quiet) process.stdout.write(flags.verbose && !flags.app ? `Successfully fetched your token:
-
-${token}
-
-` : token);
+      if (!flags.quiet) process.stderr.write("Logged in. Credentials stored in the OS keychain.\n");
     } finally {
       process.removeListener("SIGINT", abort);
       process.removeListener("SIGTERM", abort);

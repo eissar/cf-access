@@ -3,10 +3,10 @@
 Cloudflare Access login in TypeScript. Requires Node.js 22+ and pnpm.
 
 ```sh
-npx github:eissar/cf-access login https://app.example.com --no-verbose
+npx github:eissar/cf-access login https://app.example.com
 ```
 
-Open the printed URL manually; the JWT is written to stdout. Tokens use the OS keychain via [cross-keychain](docs/cross-keychain.md); file/null backends are rejected. Only public JWKS and locks remain on disk. Old `.token` files are not migrated or deleted.
+Open the printed URL manually. Tokens are never printed; they use the OS keychain via [cross-keychain](docs/cross-keychain.md); file/null backends are rejected. Only public JWKS and locks remain on disk. Old `.token` files are not migrated or deleted.
 
 ```sh
 pnpm install
