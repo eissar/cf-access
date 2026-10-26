@@ -1,4 +1,4 @@
-import type { SecretStorageBackend } from 'cross-keychain';
+import type { SecretStorageBackend } from '../../../vendor/cross-keychain/index.js';
 import type { TokenStore } from './types.js';
 
 export const KEYCHAIN_SERVICE = 'cf-access';
@@ -22,6 +22,6 @@ export function keychainTokenStore(backend: Pick<SecretStorageBackend, 'id' | 'g
 }
 
 export async function createKeychainStore(): Promise<TokenStore> {
-  const { getKeyring } = await import('cross-keychain');
+  const { getKeyring } = await import('../../../vendor/cross-keychain/index.js');
   return keychainTokenStore(await getKeyring());
 }

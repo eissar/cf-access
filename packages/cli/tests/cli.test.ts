@@ -19,6 +19,13 @@ test('help succeeds without logging in', () => {
   assert.equal(result.stderr, '');
 });
 
+test('no arguments prints help successfully', () => {
+  const result = run();
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Usage: cf-access/);
+  assert.equal(result.stderr, '');
+});
+
 test('missing URL fails with no token on stdout', () => {
   const result = run('login');
   assert.equal(result.status, 1);

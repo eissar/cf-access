@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { KEYCHAIN_SERVICE, keychainTokenStore } from '../src/keychain.js';
 import { readToken, tokenAccount, writeToken } from '../src/cache.js';
 import { MemoryTokenStore } from './store.js';
@@ -7,8 +9,19 @@ import { MemoryTokenStore } from './store.js';
 const token = (aud = 'aud', exp = Math.floor(Date.now() / 1000) + 3600) =>
   `e30.${Buffer.from(JSON.stringify({ aud, exp })).toString('base64url')}.signature`;
 
-test('pinned upstream package is importable with its generated build patch', async () => {
-  const upstream = await import('cross-keychain');
+test('vendored artifacts match recorded SHA-256 checksums', async () => {
+  const root = new URL('../../../vendor/cross-keychain/', import.meta.url);
+  const manifest = await readFile(new URL('SHA256SUMS', root), 'utf8');
+  for (const line of manifest.trim().split('\n')) {
+    const [expected, path] = line.split('  ');
+    assert.ok(expected && path);
+    const actual = createHash('sha256').update(await readFile(new URL(path, root))).digest('hex');
+    assert.equal(actual, expected, path);
+  }
+});
+
+test('vendored upstream library is importable', async () => {
+  const upstream = await import('../../../vendor/cross-keychain/index.js');
   assert.equal(typeof upstream.getKeyring, 'function');
   assert.equal(typeof upstream.getPassword, 'function');
 });

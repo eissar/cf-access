@@ -1,59 +1,62 @@
-# cross-keychain dependency provenance
+# Vendored cross-keychain
 
 - Repository: https://github.com/magarcia/cross-keychain
 - Commit: `38d1f8fec281e18a6838706906835cbb0965b1ba`
-- Package version at this commit: `1.1.0`
-- License: MIT (included in the installed upstream package)
-- Dependency specifier: `github:magarcia/cross-keychain#38d1f8fec281e18a6838706906835cbb0965b1ba`
+- Upstream version: `1.1.0`
+- License: MIT; preserved in `vendor/cross-keychain/LICENSE` and the shipped CLI
+- Files: upstream ESM library, source map, TypeScript declarations and Windows helper
+- Checksums: `vendor/cross-keychain/SHA256SUMS`
 
-## Why the patch exists
+## Why vendor?
 
-The commit's package exports refer to `dist/`, which is not committed. Its
-`prepare` script runs Husky, not the build. Its `files` allowlist excludes
-`src/` from the installed package. A plain Git dependency installs successfully
-but cannot be imported.
+The requested commit does not ship built files through a Git install. Our prior
+Git dependency plus build patch also failed consumer installs with pnpm's
+`blockExoticSubdeps`. We now commit the exact upstream build artifacts and bundle
+the ESM library into `bin/cf-access.js`. There is no Git dependency, local
+dependency, package patch, or install-time build.
 
-The pnpm patch adds the output of the upstream Rollup build: ESM/CommonJS
-bundles, declarations, source maps, CLI, and the Windows PowerShell helper.
-It does not alter upstream source or credential behavior. The application uses
-the ESM library API, not the dependency's CLI.
+The upstream library build imports only Node built-ins and the optional native
+`@napi-rs/keyring` package. The native bindings remain an ordinary npm optional
+dependency; CLI-only upstream dependencies are not needed.
+
+No upstream credential behavior has been changed. Its Windows PowerShell helper
+is copied to `bin/scripts/credman.ps1`, matching the bundled library's
+`import.meta.url`-relative lookup. Licenses for bundled dependencies are shipped
+in `bin/licenses/`.
 
 ## Regenerate
 
-Requires Git, npm, and the project's pinned pnpm. Review upstream lifecycle
-scripts before allowing any build; building a dependency executes code.
+Requires Git, npm, pnpm and a POSIX shell. This executes the pinned upstream
+Rollup build; review its build code before running.
 
 ```sh
-git clone https://github.com/magarcia/cross-keychain.git /tmp/cross-keychain-build
-git -C /tmp/cross-keychain-build checkout --detach 38d1f8fec281e18a6838706906835cbb0965b1ba
-npm --prefix /tmp/cross-keychain-build ci --ignore-scripts --no-audit --no-fund
-npm --prefix /tmp/cross-keychain-build run build
-
-# Run these from the cf-access repository.
-pnpm patch cross-keychain@1.1.0 --edit-dir /tmp/cross-keychain-patch
-cp -r /tmp/cross-keychain-build/dist/. /tmp/cross-keychain-patch/dist/
-pnpm patch-commit /tmp/cross-keychain-patch
-pnpm install --frozen-lockfile
+pnpm vendor:keychain
+(cd vendor/cross-keychain && sha256sum -c SHA256SUMS)
+pnpm build
 pnpm typecheck
 pnpm test
+pnpm test:package
 ```
 
-Use fresh temporary directories. When initially generating a patch from an
-unpatched install, create the destination `dist/` before copying. The workspace
-allowlist permits the Git dependency's prepare lifecycle only for the exact
-pinned tarball URL. Optional native bindings remain platform-specific.
+`scripts/vendor-cross-keychain.sh` checks out the full commit, installs from its
+npm lockfile with lifecycle scripts disabled, runs its build explicitly, copies
+the library artifacts and license, and records SHA-256 checksums. Review both the
+vendor and generated CLI diffs before committing. The committed CLI lets GitHub
+consumers run without installing development dependencies or executing builds.
+
+`pnpm test:package` packs the application and tests isolated tarball and local-Git
+consumer installs with `blockExoticSubdeps: true`, including the no-argument help
+and login help entry points. These are packaging tests, not live login tests.
 
 ## Storage policy
 
-The adapter captures cross-keychain's selected backend and accepts only these
-IDs: `native-macos`, `native-windows`, `native-linux`, `macos`, `windows`,
-`secret-service`. It rejects `file`, `null`, and unknown backend IDs before
-performing credential operations.
+The adapter captures the selected backend and accepts only `native-macos`,
+`native-windows`, `native-linux`, `macos`, `windows`, and `secret-service`.
+File, null and unknown backend IDs are rejected before credential operations.
+Keychain errors propagate; no token silently falls back to a file. Public JWKS
+and process locks remain filesystem-based.
 
-This restriction applies to the default store. Library callers supplying their
-own `TokenStore` are responsible for its security and persistence semantics.
-Public JWKS and process locks remain filesystem-based.
-
-Cross-keychain's own backend discovery/configuration can inspect files and load
-native modules. OS credential stores may prompt for access and need an active
-user session. No token is silently written to a file if access fails.
+This policy applies to the default store; callers providing their own
+`TokenStore` control its storage semantics. OS keychains can prompt and require
+an active user session. The upstream CLI-based macOS fallback can briefly expose
+secrets through process arguments; prefer `TS_KEYRING_BACKEND=native-macos`.

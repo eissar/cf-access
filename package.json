@@ -10,23 +10,32 @@
   "scripts": {
     "cf-access": "tsx packages/cli/src/index.ts",
     "dev": "tsx packages/cli/src/index.ts",
-    "build": "tsc -p packages/cli/tsconfig.build.json",
+    "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test packages/cli/tests/*.test.ts"
-  },
-  "dependencies": {
-    "commander": "^14.0.0",
-    "cross-keychain": "github:magarcia/cross-keychain#38d1f8fec281e18a6838706906835cbb0965b1ba",
-    "jose": "^6.1.0",
-    "tweetnacl": "^1.0.3"
+    "test": "tsx --test packages/cli/tests/*.test.ts",
+    "vendor:keychain": "bash scripts/vendor-cross-keychain.sh",
+    "test:package": "node scripts/test-package.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "commander": "^14.0.0",
+    "esbuild": "^0.28.2",
+    "jose": "^6.1.0",
     "tsx": "^4.20.0",
+    "tweetnacl": "^1.0.3",
     "typescript": "^5.9.0"
   },
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "pnpm@12.15.0"
+  "packageManager": "pnpm@12.15.0",
+  "optionalDependencies": {
+    "@napi-rs/keyring": "^1.2.0"
+  },
+  "files": [
+    "bin/",
+    "vendor/cross-keychain/LICENSE",
+    "docs/cross-keychain.md",
+    "README.md"
+  ]
 }
