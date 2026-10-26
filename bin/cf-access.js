@@ -8152,6 +8152,37 @@ async function withLock(path2, signal, work) {
   }
 }
 
+// packages/cli/src/session.ts
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+var execute = promisify(execFile);
+var guidance = "Run from a session with a working D-Bus connection and an available Secret Service keyring. If using a long-lived terminal/server, refresh its session environment.";
+async function probeSecretService(address) {
+  await execute("dbus-send", [
+    `--bus=${address}`,
+    "--print-reply",
+    "--reply-timeout=3000",
+    "--dest=org.freedesktop.secrets",
+    "/org/freedesktop/secrets",
+    "org.freedesktop.DBus.Peer.Ping"
+  ], { timeout: 5e3, maxBuffer: 64 * 1024 });
+}
+async function assertSecretServiceSession(options = {}) {
+  if ((options.platform ?? process.platform) !== "linux") return;
+  const address = options.address ?? process.env.DBUS_SESSION_BUS_ADDRESS;
+  if (!address?.trim()) {
+    throw new Error(`DBUS_SESSION_BUS_ADDRESS is missing. ${guidance}`);
+  }
+  try {
+    await (options.probe ?? probeSecretService)(address);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      throw new Error("Linux keychain checks require dbus-send (Debian/Ubuntu/Devuan: install dbus-bin).");
+    }
+    throw new Error(`Cannot reach Secret Service through the configured D-Bus session. ${guidance}`);
+  }
+}
+
 // packages/cli/src/keychain.ts
 var KEYCHAIN_SERVICE = "cf-access";
 var osBackends = /* @__PURE__ */ new Set(["macos", "windows", "secret-service"]);
@@ -8170,6 +8201,7 @@ function keychainTokenStore(backend) {
   };
 }
 async function createKeychainStore() {
+  await assertSecretServiceSession();
   const { getKeyring: getKeyring2, initBackend: initBackend2 } = await Promise.resolve().then(() => (init_cross_keychain(), cross_keychain_exports));
   await initBackend2((backend) => osBackends.has(backend.id));
   return keychainTokenStore(await getKeyring2());
@@ -8287,8 +8319,8 @@ async function exchange(appUrl, orgToken, audience, authDomain, options) {
 }
 async function status(input, options = {}) {
   const appUrl = normalizeURL(input);
-  const info = await discoverApp(appUrl, options);
   const store = options.tokenStore ?? await createKeychainStore();
+  const info = await discoverApp(appUrl, options);
   const account = tokenAccount("app", `${info.appHostname}
 ${info.appAud}`);
   const token = await store.get(account);
@@ -8305,10 +8337,10 @@ ${info.appAud}`);
 }
 async function login(input, options = {}) {
   const appUrl = normalizeURL(input);
+  const store = options.tokenStore ?? await createKeychainStore();
   const info = await discoverApp(appUrl, options);
   info.authDomain = validateAuthDomain(info.authDomain);
   const dir = options.cacheDir ?? join3(homedir2(), ".cf-access");
-  const store = options.tokenStore ?? await createKeychainStore();
   const appAccount = tokenAccount("app", `${info.appHostname}
 ${info.appAud}`);
   const orgAccount = tokenAccount("org", info.authDomain);

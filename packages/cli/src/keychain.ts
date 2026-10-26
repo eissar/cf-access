@@ -1,5 +1,6 @@
 import type { SecretStorageBackend } from '../../../vendor/cross-keychain/index.js';
 import type { TokenStore } from './types.js';
+import { assertSecretServiceSession } from './session.js';
 
 export const KEYCHAIN_SERVICE = 'cf-access';
 const osBackends = new Set(['macos', 'windows', 'secret-service']);
@@ -22,6 +23,7 @@ export function keychainTokenStore(backend: Pick<SecretStorageBackend, 'id' | 'g
 }
 
 export async function createKeychainStore(): Promise<TokenStore> {
+  await assertSecretServiceSession();
   const { getKeyring, initBackend } = await import('../../../vendor/cross-keychain/index.js');
   // Restrict selection itself, so a native backend cannot mask Secret Service.
   await initBackend(backend => osBackends.has(backend.id));

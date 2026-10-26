@@ -83,8 +83,8 @@ export interface TokenStatus {
 /** Read-only credential inspection. Discovery verifies app identity, not token acceptance. */
 export async function status(input: string, options: LoginOptions = {}): Promise<TokenStatus> {
   const appUrl = normalizeURL(input);
-  const info = await discoverApp(appUrl, options);
   const store = options.tokenStore ?? await createKeychainStore();
+  const info = await discoverApp(appUrl, options);
   const account = tokenAccount('app', `${info.appHostname}\n${info.appAud}`);
   const token = await store.get(account);
   const result = { hostname: appUrl.hostname };
@@ -101,11 +101,11 @@ export async function status(input: string, options: LoginOptions = {}): Promise
 
 export async function login(input: string, options: LoginOptions = {}): Promise<string> {
   const appUrl = normalizeURL(input);
+  const store = options.tokenStore ?? await createKeychainStore();
   const info = await discoverApp(appUrl, options);
   // Revalidate even though metadata verification already enforces it before using the value in URLs/cache names.
   info.authDomain = validateAuthDomain(info.authDomain);
   const dir = options.cacheDir ?? join(homedir(), '.cf-access');
-  const store = options.tokenStore ?? await createKeychainStore();
   const appAccount = tokenAccount('app', `${info.appHostname}\n${info.appAud}`);
   const orgAccount = tokenAccount('org', info.authDomain);
   const cached = await readToken(store, appAccount, info.appAud);

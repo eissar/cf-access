@@ -55,7 +55,11 @@ Selection is restricted to cross-keychain's non-native `macos`, `windows`, and
 `secret-service` backends. Native, file, null and unknown backend IDs are rejected.
 Linux uses `secret-tool` with an active Secret Service daemon, such as GNOME
 Keyring or KDE Wallet. On Debian/Ubuntu install `libsecret-tools` if `secret-tool`
-is missing. There is no kernel-keyutils or file fallback.
+is missing. The Linux preflight also requires `dbus-send` (`dbus-bin`). Before
+app discovery or authentication, login/status reject a missing
+`DBUS_SESSION_BUS_ADDRESS` or a failed Secret Service ping. No `DISPLAY` is
+required, and no alternative bus is discovered or private session created.
+There is no kernel-keyutils or file fallback.
 
 Credentials previously stored by the native backend are not migrated. Log in
 again after configuring Secret Service. Public JWKS and process locks remain

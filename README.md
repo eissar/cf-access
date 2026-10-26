@@ -7,7 +7,7 @@ npx github:eissar/cf-access login https://app.example.com
 npx github:eissar/cf-access status https://app.example.com
 ```
 
-Open the printed URL manually. Tokens are never printed; they use the OS keychain via [cross-keychain](docs/cross-keychain.md); native/file/null backends are disabled. Linux requires `secret-tool` (`libsecret-tools` on Debian/Ubuntu) and an active Secret Service session. Only public JWKS and locks remain on disk. Old `.token` files are not migrated or deleted.
+Open the printed URL manually. Tokens are never printed; they use the OS keychain via [cross-keychain](docs/cross-keychain.md); native/file/null backends are disabled. Linux requires `secret-tool`, `dbus-send` (`libsecret-tools` and `dbus-bin` on Debian/Ubuntu/Devuan), and a working Secret Service session. Missing/unreachable sessions fail before authentication; `DISPLAY` is not required. Only public JWKS and locks remain on disk. Old `.token` files are not migrated or deleted.
 
 ```sh
 pnpm install
