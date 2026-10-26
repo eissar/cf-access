@@ -2,3 +2,6 @@ packages:
   - packages/*
 allowBuilds:
   esbuild: true
+  cross-keychain@https://codeload.github.com/magarcia/cross-keychain/tar.gz/38d1f8fec281e18a6838706906835cbb0965b1ba: true
+patchedDependencies:
+  cross-keychain@1.1.0: patches/cross-keychain@1.1.0.patch

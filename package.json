@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "commander": "^14.0.0",
+    "cross-keychain": "github:magarcia/cross-keychain#38d1f8fec281e18a6838706906835cbb0965b1ba",
     "jose": "^6.1.0",
     "tweetnacl": "^1.0.3"
   },

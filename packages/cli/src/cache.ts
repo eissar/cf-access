@@ -1,9 +1,11 @@
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rm, stat } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
-export function tokenPath(dir: string, kind: 'app' | 'org', key: string): string {
-  return join(dir, `${kind}-${createHash('sha256').update(key).digest('hex')}.token`);
+import type { TokenStore } from './types.js';
+
+export function tokenAccount(kind: 'app' | 'org', key: string): string {
+  return `${kind}-${createHash('sha256').update(key).digest('hex')}`;
 }
 
 export function tokenClaims(token: string): { exp?: number; aud?: string | string[] } | undefined {
@@ -21,20 +23,16 @@ export function validToken(token: string, audience?: string): boolean {
   return true;
 }
 
-export async function readToken(path: string, audience?: string): Promise<string | undefined> {
-  try {
-    const token = (await readFile(path, 'utf8')).trim();
-    if (validToken(token, audience)) return token;
-    await rm(path, { force: true });
-  } catch { /* absent or unreadable */ }
+export async function readToken(store: TokenStore, account: string, audience?: string): Promise<string | undefined> {
+  const token = await store.get(account);
+  if (token === null) return undefined;
+  if (validToken(token, audience)) return token;
+  await store.delete(account);
   return undefined;
 }
 
-export async function writeToken(path: string, token: string): Promise<void> {
-  await mkdir(join(path, '..'), { recursive: true, mode: 0o700 });
-  const temp = `${path}.${randomUUID()}.tmp`;
-  await writeFile(temp, `${token}\n`, { mode: 0o600 });
-  await rename(temp, path);
+export async function writeToken(store: TokenStore, account: string, token: string): Promise<void> {
+  await store.set(account, token);
 }
 
 // Exclusive-create lock. Stale locks are reclaimed only after 10 minutes; this protocol is local to this TS client.

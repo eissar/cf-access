@@ -1,13 +1,13 @@
 import { discoverApp, validateAuthDomain } from './metadata.js';
-import { readToken, tokenPath, validToken, withLock, writeToken } from './cache.js';
+import { readToken, tokenAccount, validToken, withLock, writeToken } from './cache.js';
+import { createKeychainStore } from './keychain.js';
 import { message, request } from './http.js';
 import { transfer } from './transfer.js';
-import { rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { LoginOptions } from './types.js';
 
-export type { LoginOptions } from './types.js';
+export type { LoginOptions, TokenStore } from './types.js';
 
 export function normalizeURL(input: string): URL {
   let value = input.trim();
@@ -80,20 +80,21 @@ export async function login(input: string, options: LoginOptions = {}): Promise<
   // Revalidate even though metadata verification already enforces it before using the value in URLs/cache names.
   info.authDomain = validateAuthDomain(info.authDomain);
   const dir = options.cacheDir ?? join(homedir(), '.cf-access');
-  const appPath = tokenPath(dir, 'app', `${info.appHostname}\n${info.appAud}`);
-  const orgPath = tokenPath(dir, 'org', info.authDomain);
-  const cached = await readToken(appPath, info.appAud);
+  const store = options.tokenStore ?? await createKeychainStore();
+  const appAccount = tokenAccount('app', `${info.appHostname}\n${info.appAud}`);
+  const orgAccount = tokenAccount('org', info.authDomain);
+  const cached = await readToken(store, appAccount, info.appAud);
   if (cached && await tokenAccepted(appUrl, cached, options)) return cached;
-  if (cached) await rm(appPath, { force: true });
-  return withLock(appPath, options.signal, async () => {
-    const second = await readToken(appPath, info.appAud);
+  if (cached) await store.delete(appAccount);
+  return withLock(join(dir, appAccount), options.signal, async () => {
+    const second = await readToken(store, appAccount, info.appAud);
     if (second && await tokenAccepted(appUrl, second, options)) return second;
-    if (second) await rm(appPath, { force: true });
-    const org = await readToken(orgPath);
+    if (second) await store.delete(appAccount);
+    const org = await readToken(store, orgAccount);
     if (org) {
       const exchanged = await exchange(appUrl, org, info.appAud, info.authDomain, options).catch(() => undefined);
       if (exchanged && await tokenAccepted(appUrl, exchanged, options)) {
-        await writeToken(appPath, exchanged);
+        await writeToken(store, appAccount, exchanged);
         return exchanged;
       }
     }
@@ -101,16 +102,16 @@ export async function login(input: string, options: LoginOptions = {}): Promise<
     const tokens = await transfer(appUrl, info.appAud, { ...options, fedramp: options.fedramp || info.authDomain.endsWith('.fed.cloudflareaccess.com') });
     if (!validToken(tokens.app_token, info.appAud)) throw new Error('received app token is expired or has an unexpected audience');
     if (!validToken(tokens.org_token)) throw new Error('received organization token is expired');
-    await writeToken(orgPath, tokens.org_token);
-    await writeToken(appPath, tokens.app_token);
+    await writeToken(store, orgAccount, tokens.org_token);
+    await writeToken(store, appAccount, tokens.app_token);
     if (await tokenAccepted(appUrl, tokens.app_token, options)) return tokens.app_token;
-    await rm(appPath, { force: true });
+    await store.delete(appAccount);
     const retry = await transfer(appUrl, info.appAud, { ...options, fedramp: options.fedramp || info.authDomain.endsWith('.fed.cloudflareaccess.com') });
     if (!validToken(retry.app_token, info.appAud)) throw new Error('received app token is expired or has an unexpected audience');
     if (!await tokenAccepted(appUrl, retry.app_token, options)) throw new Error('failed to verify token at application edge');
     if (!validToken(retry.org_token)) throw new Error('received organization token is expired');
-    await writeToken(orgPath, retry.org_token);
-    await writeToken(appPath, retry.app_token);
+    await writeToken(store, orgAccount, retry.org_token);
+    await writeToken(store, appAccount, retry.app_token);
     return retry.app_token;
   });
 }

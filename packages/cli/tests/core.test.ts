@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
@@ -9,7 +9,8 @@ import { exportJWK, SignJWT } from 'jose';
 import { login, normalizeURL } from '../src/client.js';
 import { transfer } from '../src/transfer.js';
 import { validateAuthDomain } from '../src/metadata.js';
-import { tokenClaims, tokenPath, validToken } from '../src/cache.js';
+import { tokenClaims, tokenAccount, validToken } from '../src/cache.js';
+import { MemoryTokenStore } from './store.js';
 
 function jwt(payload: object): string {
   return `e30.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.signature`;
@@ -45,6 +46,7 @@ test('local token parsing validates expiry and audience without asserting signat
 
 test('verifies signed metadata and decrypts padded-base64 nacl transfer response', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'cf-access-core-'));
+  const tokenStore = new MemoryTokenStore();
   const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   const jwk = await exportJWK(publicKey);
   jwk.kid = 'metadata-key'; jwk.alg = 'RS256';
@@ -52,7 +54,6 @@ test('verifies signed metadata and decrypts padded-base64 nacl transfer response
     .setProtectedHeader({ alg: 'RS256', kid: 'metadata-key' }).setIssuedAt().sign(privateKey);
   const server = nacl.box.keyPair();
   let browserUrl = '';
-  let transferMessages = 0;
   let pollCount = 0;
   const fetcher: typeof fetch = async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : input.toString());
@@ -75,9 +76,11 @@ test('verifies signed metadata and decrypts padded-base64 nacl transfer response
     throw new Error(`unexpected request ${init?.method} ${url}`);
   };
   try {
-    const result = await login('https://app.example.test/start?existing=keep', { cacheDir: dir, fetch: fetcher, onMessage: message => { if (message.startsWith('Open this URL')) browserUrl = message.split('\n')[1]!; } });
+    const result = await login('https://app.example.test/start?existing=keep', { cacheDir: dir, tokenStore, fetch: fetcher, onMessage: message => { if (message.startsWith('Open this URL')) browserUrl = message.split('\n')[1]!; } });
     assert.equal(validToken(result, 'app-aud'), true);
     assert.equal(pollCount, 1);
+    assert.equal(await login('https://app.example.test/start?existing=keep', { cacheDir: dir, tokenStore, fetch: fetcher }), result);
+    assert.equal(pollCount, 1, 'a valid keychain token avoids a second transfer');
     const landing = new URL(browserUrl);
     assert.equal(landing.pathname, '/cdn-cgi/access/cli');
     assert.equal(landing.searchParams.get('token')?.length, 44);
@@ -86,7 +89,12 @@ test('verifies signed metadata and decrypts padded-base64 nacl transfer response
     assert.equal(redirect.searchParams.get('existing'), 'keep');
     assert.equal(redirect.searchParams.get('token'), landing.searchParams.get('token'));
     assert.equal(landing.searchParams.get('token'), redirect.searchParams.get('token'));
-    assert.equal((await readFile(tokenPath(dir, 'org', 'team.cloudflareaccess.com'), 'utf8')).trim().length > 0, true);
+    assert.ok(await tokenStore.get(tokenAccount('org', 'team.cloudflareaccess.com')));
+    assert.equal(await tokenStore.get(tokenAccount('app', 'app.example.test\napp-aud')), result);
+    for (const file of await readdir(dir)) {
+      assert.ok(file.endsWith('.jwks.json'), `unexpected disk cache file: ${file}`);
+      assert.equal((await readFile(join(dir, file), 'utf8')).includes(result), false);
+    }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -96,10 +104,10 @@ test('rejects cached token at edge, removes it, and retries browser transfer onc
   const jwk = await exportJWK(publicKey); jwk.kid = 'key'; jwk.alg = 'RS256';
   const metadata = await new SignJWT({ type: 'match', hostname: 'app.example.test', auth_domain: 'team.cloudflareaccess.com', aud: 'app-aud' })
     .setProtectedHeader({ alg: 'RS256', kid: 'key' }).setIssuedAt().sign(privateKey);
-  const appPath = tokenPath(dir, 'app', 'app.example.test\napp-aud');
+  const appAccount = tokenAccount('app', 'app.example.test\napp-aud');
   const cached = token();
-  const { writeToken } = await import('../src/cache.js');
-  await writeToken(appPath, cached);
+  const tokenStore = new MemoryTokenStore();
+  await tokenStore.set(appAccount, cached);
   const server = nacl.box.keyPair();
   let edgeChecks = 0;
   let transferPolls = 0;
@@ -124,9 +132,11 @@ test('rejects cached token at edge, removes it, and retries browser transfer onc
     throw new Error(`unexpected request ${init?.method} ${url}`);
   };
   try {
-    const result = await login('https://app.example.test/', { cacheDir: dir, fetch: fetcher });
+    const result = await login('https://app.example.test/', { cacheDir: dir, tokenStore, fetch: fetcher });
     assert.notEqual(result, cached);
     assert.equal(edgeChecks, 2);
     assert.equal(transferPolls, 1);
+    assert.ok(tokenStore.deleted.includes(appAccount));
+    assert.equal(await tokenStore.get(appAccount), result);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

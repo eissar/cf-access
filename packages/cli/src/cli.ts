@@ -6,7 +6,7 @@ export function createCLI(): Command {
   program.command('login [url]')
     .description('Authenticate in your browser and print an application JWT')
     .option('--app <url>', 'Application URL (alternative to positional URL)')
-    .option('--cache-dir <path>', 'Credential cache directory')
+    .option('--cache-dir <path>', 'Public JWKS cache and lock directory (tokens use OS keychain)')
     .option('--auto-close', 'Ask Access to close the browser interstitial')
     .option('--fedramp', 'Use the FedRAMP transfer relay')
     .option('--quiet', 'Suppress token output (login instructions still use stderr)')
