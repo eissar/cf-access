@@ -1,0 +1,31 @@
+{
+  "name": "cf-access",
+  "version": "0.1.0",
+  "description": "Cloudflare Access browser login for Node.js",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "cf-access": "bin/cf-access.js"
+  },
+  "scripts": {
+    "cf-access": "tsx packages/cli/src/index.ts",
+    "dev": "tsx packages/cli/src/index.ts",
+    "build": "tsc -p packages/cli/tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test packages/cli/tests/*.test.ts"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "jose": "^6.1.0",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@12.15.0"
+}
